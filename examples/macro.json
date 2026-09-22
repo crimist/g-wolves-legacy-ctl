@@ -1,0 +1,8 @@
+{
+  "name": "Example A",
+  "repeat": 1,
+  "events": [
+    {"type": "key", "code": 4, "down": true, "delay_ms": 50},
+    {"type": "key", "code": 4, "down": false, "delay_ms": 0}
+  ]
+}
