@@ -1,0 +1,11 @@
+[Unit]
+Description=Log G-Wolves legacy mouse battery readings
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/python3 -u %h/.local/bin/gwolves-battery-logger --output %h/.local/state/gwolves-legacy-ctl/battery_log.csv
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

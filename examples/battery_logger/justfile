@@ -1,0 +1,16 @@
+export BATTERY_LOGGER_DIR := justfile_directory()
+service := 'gwolves-battery-logger.service'
+
+install:
+    install -d "$HOME/.local/bin"
+    if [ -e "$HOME/.local/bin/gwolves-battery-logger" ] && [ ! -L "$HOME/.local/bin/gwolves-battery-logger" ]; then echo 'Refusing to replace an existing non-symlink logger' >&2; exit 1; fi
+    ln -sfn "$BATTERY_LOGGER_DIR/log_battery.py" "$HOME/.local/bin/gwolves-battery-logger"
+    install -Dm644 "$BATTERY_LOGGER_DIR/{{service}}" "$HOME/.config/systemd/user/{{service}}"
+    systemctl --user daemon-reload
+    systemctl --user enable --now {{service}}
+
+status:
+    systemctl --user status {{service}} --no-pager
+
+logs:
+    journalctl --user -u {{service}} -f

@@ -125,6 +125,21 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(result['battery_percent'], 90)
         self.assertFalse(result['charging'])
 
+    def test_connection_status_uses_receivers_wireless_state(self):
+        mouse = object.__new__(m.Mouse)
+        disconnected = m.checked(bytes.fromhex('09 03 00 00 00 01 00') + bytes(9))
+        connected = m.checked(bytes.fromhex('09 03 00 00 00 01 01') + bytes(9))
+        offline_status = m.checked(bytes.fromhex('09 03 01 00 00 00') + bytes(10))
+        for reply, expected in ((disconnected, False), (offline_status, False),
+                                (connected, True)):
+            with patch.object(mouse, 'command', return_value=reply) as command:
+                self.assertIs(mouse.is_connected(), expected)
+                command.assert_called_once_with(0x03, allow_nonzero_status=True)
+        invalid = m.checked(bytes.fromhex('09 03 00 00 00 01 02') + bytes(9))
+        with patch.object(mouse, 'command', return_value=invalid):
+            with self.assertRaisesRegex(m.ProtocolError, 'connection state'):
+                mouse.is_connected()
+
     def test_timeout_notes_wireless_mouse_may_be_asleep(self):
         mouse = object.__new__(m.Mouse)
         mouse.fd = 999
@@ -135,7 +150,7 @@ class ProtocolTests(unittest.TestCase):
              patch.object(m.fcntl, 'ioctl'), \
              patch.object(m.select, 'select', return_value=([], [], [])):
             with self.assertRaisesRegex(
-                    TimeoutError, 'wireless mode, the mouse may be asleep'):
+                    TimeoutError, 'wireless the mouse may be asleep'):
                 mouse.command(4)
 
     def test_corrupt_reply_is_not_reported_as_battery(self):

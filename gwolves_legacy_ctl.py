@@ -288,7 +288,8 @@ class Mouse:
             print(f'{direction} {data.hex(" ")}', file=sys.stderr)
 
     def command(self, command: int, address: int = 0, data: bytes = b'',
-                read_length: int | None = None) -> bytes:
+                read_length: int | None = None,
+                allow_nonzero_status: bool = False) -> bytes:
         p = packet(command, address, data, read_length)
         if self.dry_run:
             if command not in (2, 7, 0x10):
@@ -326,7 +327,7 @@ class Mouse:
                 raise ProtocolError('Invalid vendor response checksum')
             if reply[1] != command:
                 continue  # includes asynchronous command 0A notifications
-            if reply[2]:
+            if reply[2] and not allow_nonzero_status:
                 raise ProtocolError(f'Command 0x{command:02x}: status 0x{reply[2]:02x}')
             if reply[5] > 10:
                 raise ProtocolError('Response data length exceeds 10 bytes')
@@ -350,6 +351,20 @@ class Mouse:
     def get_battery(self) -> dict:
         """Return battery telemetry; alias retained as battery() for compatibility."""
         return self.battery()
+
+    def is_connected(self) -> bool:
+        """Query whether the wireless mouse is online (the receiver can remain plugged in)."""
+        # The receiver can report offline as either a zero data byte or a
+        # nonzero command status. The vendor application treats both as offline.
+        reply = self.command(0x03, allow_nonzero_status=True)
+        if reply[2]:
+            return False
+        if reply[5] != 1:
+            raise ProtocolError('Connection response must contain one data byte')
+        state = reply[6]
+        if state not in (0, 1):
+            raise ProtocolError(f'Invalid connection state {state}: {reply.hex(" ")}')
+        return bool(state)
 
     def read_eeprom(self, address: int, length: int) -> bytes:
         bounded(address, 0, 0xFFFF, 'address')
