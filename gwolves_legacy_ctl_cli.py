@@ -34,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     get = commands.add_parser('get', help='read settings')
     getters = get.add_subparsers(dest='field', required=True)
-    for field in ('all', 'battery', 'profile', 'rate', 'stage', 'stage-count',
+    for field in ('all', 'info', 'battery', 'profile', 'rate', 'stage', 'stage-count',
                   'stages', 'lod',
                   'debounce', 'sleep', 'angle-snapping', 'ripple-control',
                   'light-off-moving', 'dpi-effect', 'lighting'):

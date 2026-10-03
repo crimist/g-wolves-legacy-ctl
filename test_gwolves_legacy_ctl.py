@@ -140,6 +140,64 @@ class ProtocolTests(unittest.TestCase):
             with self.assertRaisesRegex(m.ProtocolError, 'connection state'):
                 mouse.is_connected()
 
+    def identification_reply(self, cid=3, mid=2, length=8):
+        return m.checked(bytes((9, 1, 0, 0, 0, length))
+                         + bytes.fromhex('74 b3 a4 e8')
+                         + bytes((cid, mid)) + bytes(4))
+
+    def test_connected_mouse_info_and_vendor_challenge(self):
+        mouse = object.__new__(m.Mouse)
+        mouse.path = '/dev/hidraw-test'
+        with patch.object(mouse, 'is_connected', side_effect=[True, True]), \
+             patch.object(m.secrets, 'randbelow', side_effect=[0, 1, 2, 3]), \
+             patch.object(mouse, 'command', return_value=self.identification_reply()) as command:
+            self.assertEqual(mouse.get_info(), {
+                'device': '/dev/hidraw-test', 'connected': True,
+                'cid': 3, 'mid': 2, 'model': 'HSK Plus'})
+            command.assert_called_once_with(1, data=bytes((1, 2, 3, 4)) + bytes(4))
+
+    def test_offline_mouse_does_not_query_identity(self):
+        mouse = object.__new__(m.Mouse)
+        mouse.path = '/dev/hidraw-test'
+        with patch.object(mouse, 'is_connected', return_value=False), \
+             patch.object(mouse, 'command') as command:
+            self.assertEqual(mouse.get_info(), {
+                'device': '/dev/hidraw-test', 'connected': False,
+                'cid': None, 'mid': None, 'model': None})
+            command.assert_not_called()
+
+    def test_disconnect_during_identification_drops_cached_identity(self):
+        mouse = object.__new__(m.Mouse)
+        mouse.path = '/dev/hidraw-test'
+        with patch.object(mouse, 'is_connected', side_effect=[True, False]), \
+             patch.object(mouse, 'command', return_value=self.identification_reply()):
+            info = mouse.get_info()
+            self.assertFalse(info['connected'])
+            self.assertIsNone(info['cid'])
+            self.assertIsNone(info['mid'])
+            self.assertIsNone(info['model'])
+
+    def test_unknown_model_preserves_ids_without_guessing_name(self):
+        mouse = object.__new__(m.Mouse)
+        mouse.path = '/dev/hidraw-test'
+        with patch.object(mouse, 'is_connected', return_value=True), \
+             patch.object(mouse, 'command', return_value=self.identification_reply(7, 9)):
+            info = mouse.get_info()
+            self.assertTrue(info['connected'])
+            self.assertEqual((info['cid'], info['mid']), (7, 9))
+            self.assertIsNone(info['model'])
+
+    def test_invalid_identification_reply_is_rejected(self):
+        mouse = object.__new__(m.Mouse)
+        mouse.path = '/dev/hidraw-test'
+        for reply, message in ((self.identification_reply(length=7), 'eight data bytes'),
+                               (self.identification_reply(0, 0), 'empty model IDs')):
+            with self.subTest(message=message), \
+                 patch.object(mouse, 'is_connected', return_value=True), \
+                 patch.object(mouse, 'command', return_value=reply):
+                with self.assertRaisesRegex(m.ProtocolError, message):
+                    mouse.get_info()
+
     def test_timeout_notes_wireless_mouse_may_be_asleep(self):
         mouse = object.__new__(m.Mouse)
         mouse.fd = 999

@@ -6,12 +6,15 @@ import fcntl
 import os
 from pathlib import Path
 import select
+import secrets
 import sys
 import time
 
 VID = 0x33E4
 PIDS = (0x001A, 0x00AA)
 REPORT_SIZE = 17
+# Confirmed from vendor skins/0302 artwork and the physical HSK Plus.
+MODEL_NAMES = {(3, 2): 'HSK Plus'}
 SET_FEATURE = (3 << 30) | (REPORT_SIZE << 16) | (ord('H') << 8) | 6
 RATES = {125: 8, 250: 4, 500: 2, 1000: 1}
 DPI_BRIGHTNESS = (16, 30, 60, 90, 128, 150, 180, 210, 230, 255)
@@ -351,6 +354,31 @@ class Mouse:
     def get_battery(self) -> dict:
         """Return battery telemetry; alias retained as battery() for compatibility."""
         return self.battery()
+
+    def get_info(self) -> dict:
+        """Return live connection state and vendor model identity.
+
+        Offline mice have no identity; unknown models retain their CID/MID and
+        have model=None. Transport/protocol failures raise as with other getters.
+        """
+        offline = {'device': self.path, 'connected': False,
+                   'cid': None, 'mid': None, 'model': None}
+        if not self.is_connected():
+            return offline
+        # Vendor CheckPsd sends four random bytes in 1..100 plus four zeros.
+        # The response stores CID/MID at offsets 4/5 of its eight-byte payload.
+        challenge = bytes(secrets.randbelow(100) + 1 for _ in range(4))
+        reply = self.command(0x01, data=challenge + bytes(4))
+        if reply[5] != 8:
+            raise ProtocolError('Identification response must contain eight data bytes')
+        # Receivers may cache replies after the mouse powers off.
+        if not self.is_connected():
+            return offline
+        cid, mid = reply[10:12]
+        if cid == mid == 0:
+            raise ProtocolError('Identification response has empty model IDs')
+        return {'device': self.path, 'connected': True,
+                'cid': cid, 'mid': mid, 'model': MODEL_NAMES.get((cid, mid))}
 
     def is_connected(self) -> bool:
         """Query whether the wireless mouse is online (the receiver can remain plugged in)."""

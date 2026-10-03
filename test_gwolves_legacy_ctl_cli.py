@@ -23,7 +23,8 @@ class CliTests(unittest.TestCase):
 
     def test_get_parser_covers_decoded_fields(self):
         parser = cli.build_parser()
-        for argv, field in ((['get', 'battery'], 'battery'),
+        for argv, field in ((['get', 'info'], 'info'),
+                            (['get', 'battery'], 'battery'),
                             (['get', 'all'], 'all'),
                             (['get', 'dpi', '3'], 'dpi'),
                             (['get', 'lighting'], 'lighting'),
@@ -34,6 +35,15 @@ class CliTests(unittest.TestCase):
                 args = parser.parse_args(argv)
                 self.assertEqual(args.command, 'get')
                 self.assertEqual(args.field, field)
+
+    def test_get_info_returns_library_identity(self):
+        class Device:
+            def get_info(self):
+                return {'connected': True, 'cid': 3, 'mid': 2, 'model': 'HSK Plus'}
+
+        args = cli.build_parser().parse_args(['get', 'info'])
+        self.assertEqual(cli.get_value(Device(), args),
+                         {'connected': True, 'cid': 3, 'mid': 2, 'model': 'HSK Plus'})
 
     def test_get_all_reads_all_decoded_settings(self):
         class Device:

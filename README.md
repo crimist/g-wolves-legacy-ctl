@@ -21,6 +21,7 @@ G-Wolves' archived [Classic Wireless software page](https://shop.g-wolves.com/pa
 
 - Automatically discovers compatible mouse configuration interfaces
 - Read
+  - Connection state, model name, and vendor model IDs
   - Battery percentage
   - Charging state
 - Reads and configure
@@ -49,6 +50,7 @@ I've only tested with my HSK Plus. If this bricks your mouse it's not my problem
 
 ```sh
 python gwolves_legacy_ctl_cli.py --help
+python gwolves_legacy_ctl_cli.py get info
 ```
 
 The program should auto discover (and select if multiple) supported mice on Linux.
@@ -61,7 +63,15 @@ I split the implementation into a library file and cli file. The library file ca
 from gwolves_legacy_ctl import Mouse
 
 with Mouse() as mouse:
+    info = mouse.get_info()
+    print(info)
     battery = mouse.get_battery()
     dpi = battery["battery_percent"] * 50
     mouse.set_dpi(dpi)
 ```
+
+`Mouse.get_info()` returns `device`, `connected`, `cid`, `mid`, and `model`.
+It checks the wireless connection before and after the model query. Offline mice
+return `connected: false` with null model fields. Unknown IDs retain `cid` and
+`mid`, with `model: null`; currently only HSK Plus (`cid=3, mid=2`) has a verified
+name mapping. Transport failures raise `OSError`, `TimeoutError`, or `ProtocolError`.
